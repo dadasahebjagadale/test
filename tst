@@ -509,3 +509,113 @@ export default HierarchicalGraph;
   stroke-width: 2px;
 }
 
+
+
+
+
+
+
+
+
+import React, { useEffect, useRef, useState } from "react";
+import * as d3 from "d3";
+import dagreD3 from "dagre-d3";
+import "./custom-graph.css";
+
+const HierarchicalGraph = ({ data }) => {
+  const svgRef = useRef(null);
+  const [collapsedNodes, setCollapsedNodes] = useState({}); // Track collapsed nodes
+
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+    const inner = svg.select("g");
+
+    const graph = new dagreD3.graphlib.Graph().setGraph({
+      rankdir: "TB", // Top-to-Bottom layout
+      ranksep: 100, // Spacing between ranks
+      nodesep: 70, // Spacing between nodes
+    });
+
+    // Helper function to recursively hide child nodes
+    const addNodesAndEdges = (nodeId) => {
+      const node = data.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+
+      // Add the current node
+      graph.setNode(node.id, {
+        label: `${node.id} (${node.type})`,
+        class: collapsedNodes[node.id] ? "group-node collapsed" : "group-node",
+      });
+
+      // If node is not collapsed, add edges and child nodes
+      if (!collapsedNodes[node.id] && Array.isArray(node.childNodes)) {
+        node.childNodes.forEach((childId) => {
+          graph.setEdge(node.id, childId, {
+            label: "",
+            class: `edge-${node.id}-${childId}`,
+          });
+          addNodesAndEdges(childId); // Recursively add child nodes
+        });
+      }
+    };
+
+    // Start by adding the root nodes
+    data.nodes.forEach((node) => {
+      if (!data.nodes.some((n) => n.childNodes?.includes(node.id))) {
+        addNodesAndEdges(node.id); // Add only root nodes initially
+      }
+    });
+
+    // Render the graph
+    const render = new dagreD3.render();
+    render(inner, graph);
+
+    // Adjust SVG dimensions
+    const { width, height } = svg.node().getBBox();
+    svg
+      .attr("width", width + 40)
+      .attr("height", height + 40);
+    inner.attr("transform", "translate(20, 20)");
+
+    // Add double-click event for collapsing and expanding nodes
+    svg.selectAll("g.node").on("dblclick", function (event, id) {
+      // Toggle the collapsed state of the clicked node
+      setCollapsedNodes((prev) => ({
+        ...prev,
+        [id]: !prev[id],
+      }));
+    });
+
+    // Add click event for highlighting predecessors and successors
+    svg.selectAll("g.node").on("click", function (event, id) {
+      // Reset styles
+      d3.selectAll("g.node").classed("highlighted", false);
+      d3.selectAll("g.edgePath").classed("highlighted", false);
+
+      // Highlight the selected node
+      d3.select(this).classed("highlighted", true);
+
+      // Highlight successors
+      const successors = graph.successors(id) || [];
+      successors.forEach((succ) => {
+        d3.select(`g.node[id="${succ}"]`).classed("highlighted", true);
+        d3.select(`.edge-${id}-${succ}`).classed("highlighted", true);
+      });
+
+      // Highlight predecessors if available
+      const predecessors = graph.predecessors(id) || [];
+      predecessors.forEach((pred) => {
+        d3.select(`g.node[id="${pred}"]`).classed("highlighted", true);
+        d3.select(`.edge-${pred}-${id}`).classed("highlighted", true);
+      });
+    });
+  }, [data, collapsedNodes]);
+
+  return (
+    <svg ref={svgRef}>
+      <g />
+    </svg>
+  );
+};
+
+export default HierarchicalGraph;
