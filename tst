@@ -331,3 +331,74 @@ export default HierarchicalGraph;
   stroke: red;
   stroke-width: 2px;
 }
+
+
+
+import React, { useEffect, useRef, useState } from "react";
+import * as d3 from "d3";
+import dagreD3 from "dagre-d3";
+import "./custom-graph.css";
+
+const HierarchicalGraph = ({ data }) => {
+  const svgRef = useRef(null);
+  const [collapsedNodes, setCollapsedNodes] = useState({});
+
+  useEffect(() => {
+    if (!data || !Array.isArray(data.nodes)) {
+      console.error("Invalid data format: `data.nodes` is required and should be an array.");
+      return;
+    }
+
+    const svg = d3.select(svgRef.current);
+    const inner = svg.select("g");
+
+    const graph = new dagreD3.graphlib.Graph().setGraph({
+      rankdir: "TB",
+      ranksep: 100,
+      nodesep: 70,
+    });
+
+    // Add nodes to the graph
+    data.nodes.forEach((node) => {
+      const isCollapsed = collapsedNodes[node.id];
+      graph.setNode(node.id, {
+        label: `${node.id} (${node.type})`,
+        class: isCollapsed ? "group-node collapsed" : "group-node",
+      });
+    });
+
+    // Add edges to the graph
+    data.nodes.forEach((node) => {
+      if (!node.childNodes || collapsedNodes[node.id]) return;
+
+      node.childNodes.forEach((child) => {
+        graph.setEdge(node.id, child, {
+          label: "",
+          class: `edge-${node.id}-${child}`,
+        });
+      });
+    });
+
+    const render = new dagreD3.render();
+    render(inner, graph);
+
+    const { width, height } = svg.node().getBBox();
+    svg.attr("width", width + 40).attr("height", height + 40);
+    inner.attr("transform", "translate(20, 20)");
+
+    svg.selectAll("g.node").on("click", function (event, id) {
+      setCollapsedNodes((prevState) => ({
+        ...prevState,
+        [id]: !prevState[id],
+      }));
+    });
+  }, [data, collapsedNodes]);
+
+  return (
+    <svg ref={svgRef}>
+      <g />
+    </svg>
+  );
+};
+
+export default HierarchicalGraph;
