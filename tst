@@ -91,6 +91,7 @@ const HierarchicalGraph = ({ data }) => {
       const allPredecessors = getAllPredecessors(id);
       allPredecessors.forEach(pred => {
         d3.select(`.node-${pred}`).classed("highlighted", true);
+        // Highlight the edge from the predecessor to the current node
         d3.select(`.edge-${pred}-${id}`).classed("highlighted", true);
       });
 
