@@ -66,6 +66,18 @@ const HierarchicalGraph = ({ data }) => {
       .attr("height", Math.max(height, 600))
       .call(zoom.transform, d3.zoomIdentity.translate(20, 20));
 
+    // Recursively find all predecessors (ancestors) of a node
+    const getAllPredecessors = (nodeId, visited = new Set()) => {
+      const predecessors = graph.predecessors(nodeId) || [];
+      predecessors.forEach(pred => {
+        if (!visited.has(pred)) {
+          visited.add(pred);
+          getAllPredecessors(pred, visited); // Recursively find predecessors
+        }
+      });
+      return Array.from(visited);
+    };
+
     // Node interaction handlers
     const handleNodeClick = (event, id) => {
       // Reset all highlights
@@ -75,9 +87,9 @@ const HierarchicalGraph = ({ data }) => {
       const node = d3.select(event.currentTarget);
       node.classed("highlighted", true);
 
-      // Highlight all predecessors
-      const predecessors = graph.predecessors(id) || [];
-      predecessors.forEach(pred => {
+      // Highlight all predecessors (including indirect ones)
+      const allPredecessors = getAllPredecessors(id);
+      allPredecessors.forEach(pred => {
         d3.select(`.node-${pred}`).classed("highlighted", true);
         d3.select(`.edge-${pred}-${id}`).classed("highlighted", true);
       });
