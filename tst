@@ -123,3 +123,51 @@ const HierarchicalGraph = ({ data }) => {
 };
 
 export default HierarchicalGraph;
+
+
+
+// Recursive function to find all predecessor pairs
+const getAllPredecessorPairs = (nodeId, graph, visited = new Set(), pairs = []) => {
+  // Get immediate predecessors of the current node
+  const predecessors = graph.predecessors(nodeId) || [];
+
+  // Iterate through each predecessor
+  predecessors.forEach(pred => {
+    if (!visited.has(pred)) {
+      visited.add(pred); // Add the predecessor to the visited set
+      pairs.push([pred, nodeId]); // Add the pair [predecessor, current node]
+      // Recursively find predecessors of the current predecessor
+      getAllPredecessorPairs(pred, graph, visited, pairs);
+    }
+  });
+
+  // Return the list of all predecessor pairs
+  return pairs;
+};
+
+
+
+
+// Node interaction handlers
+const handleNodeClick = (event, id) => {
+  // Reset all highlights
+  d3.selectAll(".highlighted").classed("highlighted", false);
+
+  // Highlight the clicked node
+  const node = d3.select(event.currentTarget);
+  node.classed("highlighted", true);
+
+  // Highlight all predecessor pairs
+  const predecessorPairs = getAllPredecessorPairs(id, graph);
+  predecessorPairs.forEach(([pred, succ]) => {
+    d3.select(`.node-${pred}`).classed("highlighted", true); // Highlight predecessor node
+    d3.select(`.edge-${pred}-${succ}`).classed("highlighted", true); // Highlight edge
+  });
+
+  // Highlight only the link to one immediate successor
+  const successors = graph.successors(id) || [];
+  if (successors.length > 0) {
+    const firstSuccessor = successors[0];
+    d3.select(`.edge-${id}-${firstSuccessor}`).classed("highlighted", true);
+  }
+};
