@@ -1,173 +1,247 @@
-import React, { useEffect, useRef, useState } from "react";
-import * as d3 from "d3";
-import dagreD3 from "dagre-d3";
-import "./custom-graph.css";
+To create a robust and well-structured FastAPI application with GraphQL, JWT authentication, and proper packaging, we'll follow best practices and ensure the use of secure, vulnerability-free libraries. Below is the implementation:
 
-const HierarchicalGraph = ({ data }) => {
-  const svgRef = useRef(null);
-  const [collapsedNodes, setCollapsedNodes] = useState({});
+---
 
-  useEffect(() => {
-    const svg = d3.select(svgRef.current);
-    const inner = svg.select("g");
-    const graph = new dagreD3.graphlib.Graph()
-      .setGraph({
-        rankdir: "TB",
-        ranksep: 100,
-        nodesep: 70
-      })
-      .setDefaultEdgeLabel(() => ({}));
+### **1. Project Structure**
 
-    // Recursive node addition with collapse handling
-    const addNodesAndEdges = (nodeId) => {
-      const node = data.nodes.find(n => n.id === nodeId);
-      if (!node) return;
+Here’s the recommended project structure:
 
-      graph.setNode(node.id, {
-        label: `${node.id}`,
-        class: `group-node ${collapsedNodes[node.id] ? "collapsed" : ""}`
-      });
+```
+my_fastapi_graphql_app/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py                  # FastAPI app entry point
+│   ├── config.py                # Configuration settings
+│   ├── models/                  # Database models (DAO)
+│   │   └── book_model.py
+│   ├── schemas/                 # GraphQL schemas
+│   │   └── book_schema.py
+│   ├── services/                # Business logic
+│   │   └── book_service.py
+│   ├── controllers/             # API controllers
+│   │   └── graphql_controller.py
+│   ├── utils/                   # Utilities (e.g., JWT, logging)
+│   │   ├── auth.py
+│   │   └── logger.py
+│   └── tests/                   # Unit and integration tests
+│       └── test_graphql.py
+│
+├── requirements.txt             # Dependencies
+├── .env                         # Environment variables
+└── README.md                    # Project documentation
+```
 
-      if (!collapsedNodes[node.id] && node.child_nodes) {
-        node.child_nodes.forEach(childId => {
-          graph.setEdge(node.id, childId, {
-            class: `edge-${node.id}-${childId}`
-          });
-          addNodesAndEdges(childId);
-        });
-      }
-    };
+---
 
-    // Find root nodes (nodes without parents)
-    const rootNodes = data.nodes.filter(node => 
-      !data.nodes.some(n => 
-        n.child_nodes && n.child_nodes.includes(node.id)
-      )
-    );
+### **2. Install Required Libraries**
 
-    // Clear existing graph and re-render
-    inner.selectAll("*").remove();
-    rootNodes.forEach(node => addNodesAndEdges(node.id));
+Ensure you install only secure, vulnerability-free libraries. Use `pip` with `safety` or `pip-audit` to check for vulnerabilities.
 
-    // Create renderer and draw graph
-    const render = dagreD3.render();
-    render(inner, graph);
+```bash
+pip install fastapi uvicorn strawberry-graphql python-jose[cryptography] passlib python-dotenv
+```
 
-    // Set up zoom/pan
-    const zoom = d3.zoom().on("zoom", (event) => {
-      inner.attr("transform", event.transform);
-    });
-    svg.call(zoom);
+- `fastapi`: The web framework.
+- `uvicorn`: ASGI server to run the app.
+- `strawberry-graphql`: GraphQL library for FastAPI.
+- `python-jose`: JWT token handling.
+- `passlib`: Password hashing.
+- `python-dotenv`: Environment variable management.
 
-    // Set initial viewport
-    const { width, height } = svg.node().getBBox();
-    svg
-      .attr("width", Math.max(width, 800))
-      .attr("height", Math.max(height, 600))
-      .call(zoom.transform, d3.zoomIdentity.translate(20, 20));
+---
 
-    // Recursively find all predecessors (ancestors) of a node
-    const getAllPredecessors = (nodeId, visited = new Set()) => {
-      const predecessors = graph.predecessors(nodeId) || [];
-      predecessors.forEach(pred => {
-        if (!visited.has(pred)) {
-          visited.add(pred);
-          getAllPredecessors(pred, visited); // Recursively find predecessors
-        }
-      });
-      return Array.from(visited);
-    };
+### **3. Implementation**
 
-    // Node interaction handlers
-    const handleNodeClick = (event, id) => {
-      // Reset all highlights
-      d3.selectAll(".highlighted").classed("highlighted", false);
+#### **`app/config.py`**
+Configuration settings for the app.
 
-      // Highlight the clicked node
-      const node = d3.select(event.currentTarget);
-      node.classed("highlighted", true);
+```python
+from pydantic import BaseSettings
 
-      // Highlight all predecessors (including indirect ones)
-      const allPredecessors = getAllPredecessors(id);
-      allPredecessors.forEach(pred => {
-        d3.select(`.node-${pred}`).classed("highlighted", true);
-        // Highlight the edge from the predecessor to the current node
-        d3.select(`.edge-${pred}-${id}`).classed("highlighted", true);
-      });
+class Settings(BaseSettings):
+    DATABASE_URL: str = "sqlite:///./test.db"
+    SECRET_KEY: str = "your-secret-key"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
-      // Highlight only the link to one immediate successor
-      const successors = graph.successors(id) || [];
-      if (successors.length > 0) {
-        const firstSuccessor = successors[0];
-        d3.select(`.edge-${id}-${firstSuccessor}`).classed("highlighted", true);
-      }
-    };
+    class Config:
+        env_file = ".env"
 
-    const handleNodeDoubleClick = (event, id) => {
-      // Toggle collapsed state
-      setCollapsedNodes(prev => ({ ...prev, [id]: !prev[id] }));
-    };
+settings = Settings()
+```
 
-    // Add event listeners
-    svg.selectAll("g.node")
-      .on("click", handleNodeClick)
-      .on("dblclick", handleNodeDoubleClick);
+---
 
-  }, [data, collapsedNodes]);
+#### **`app/utils/auth.py`**
+JWT authentication and authorization utilities.
 
-  return (
-    <svg ref={svgRef} style={{ border: "1px solid #ddd" }}>
-      <g />
-    </svg>
-  );
-};
+```python
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 
-export default HierarchicalGraph;
+from app.config import settings
 
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# OAuth2 scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-// Recursive function to find all predecessor pairs
-const getAllPredecessorPairs = (nodeId, graph, visited = new Set(), pairs = []) => {
-  // Get immediate predecessors of the current node
-  const predecessors = graph.predecessors(nodeId) || [];
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
 
-  // Iterate through each predecessor
-  predecessors.forEach(pred => {
-    if (!visited.has(pred)) {
-      visited.add(pred); // Add the predecessor to the visited set
-      pairs.push([pred, nodeId]); // Add the pair [predecessor, current node]
-      // Recursively find predecessors of the current predecessor
-      getAllPredecessorPairs(pred, graph, visited, pairs);
-    }
-  });
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
-  // Return the list of all predecessor pairs
-  return pairs;
-};
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
 
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    return username
+```
 
+---
 
+#### **`app/schemas/book_schema.py`**
+GraphQL schema definition.
 
-// Node interaction handlers
-const handleNodeClick = (event, id) => {
-  // Reset all highlights
-  d3.selectAll(".highlighted").classed("highlighted", false);
+```python
+import strawberry
 
-  // Highlight the clicked node
-  const node = d3.select(event.currentTarget);
-  node.classed("highlighted", true);
+@strawberry.type
+class Book:
+    title: str
+    author: str
 
-  // Highlight all predecessor pairs
-  const predecessorPairs = getAllPredecessorPairs(id, graph);
-  predecessorPairs.forEach(([pred, succ]) => {
-    d3.select(`.node-${pred}`).classed("highlighted", true); // Highlight predecessor node
-    d3.select(`.edge-${pred}-${succ}`).classed("highlighted", true); // Highlight edge
-  });
+@strawberry.type
+class Query:
+    @strawberry.field
+    def book(self) -> Book:
+        return Book(title="The Great Gatsby", author="F. Scott Fitzgerald")
 
-  // Highlight only the link to one immediate successor
-  const successors = graph.successors(id) || [];
-  if (successors.length > 0) {
-    const firstSuccessor = successors[0];
-    d3.select(`.edge-${id}-${firstSuccessor}`).classed("highlighted", true);
-  }
-};
+schema = strawberry.Schema(Query)
+```
+
+---
+
+#### **`app/controllers/graphql_controller.py`**
+GraphQL controller with JWT authentication.
+
+```python
+from fastapi import Depends
+from strawberry.asgi import GraphQL
+from app.schemas.book_schema import schema
+from app.utils.auth import get_current_user
+
+async def get_context(user=Depends(get_current_user)):
+    return {"user": user}
+
+graphql_app = GraphQL(schema, context_getter=get_context)
+```
+
+---
+
+#### **`app/main.py`**
+FastAPI app entry point.
+
+```python
+from fastapi import FastAPI, Depends
+from app.controllers.graphql_controller import graphql_app
+from app.utils.auth import get_current_user
+
+app = FastAPI()
+
+# Add GraphQL endpoint
+app.add_route("/graphql", graphql_app)
+app.add_websocket_route("/graphql", graphql_app)
+
+# Root endpoint
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the FastAPI GraphQL API!"}
+```
+
+---
+
+#### **`requirements.txt`**
+List of dependencies.
+
+```
+fastapi==0.95.2
+uvicorn==0.22.0
+strawberry-graphql==0.187.0
+python-jose==3.3.0
+passlib==1.7.4
+python-dotenv==1.0.0
+```
+
+---
+
+#### **`.env`**
+Environment variables.
+
+```
+DATABASE_URL=sqlite:///./test.db
+SECRET_KEY=your-secret-key
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+---
+
+### **4. Run the Application**
+
+Start the app using Uvicorn:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+---
+
+### **5. Access Swagger UI**
+
+FastAPI automatically provides Swagger UI for REST endpoints. For GraphQL, you can use the GraphQL Playground at `http://127.0.0.1:8000/graphql`.
+
+---
+
+### **6. Testing**
+
+- Use `pytest` for unit and integration tests.
+- Test JWT authentication and GraphQL queries.
+
+---
+
+### **7. Security Best Practices**
+
+1. Use environment variables for sensitive data (e.g., `SECRET_KEY`).
+2. Regularly update dependencies using `pip-audit` or `safety`.
+3. Implement rate limiting and CORS for production.
+4. Use HTTPS in production.
+
+---
+
+This implementation provides a secure, well-structured FastAPI GraphQL application with JWT authentication and proper packaging. Let me know if you need further assistance!
