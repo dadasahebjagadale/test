@@ -645,3 +645,82 @@ This structure makes the codebase modular and maintainable. Let me know if you n
 
 
 
+
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class CheckBoxComboBoxExample {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(CheckBoxComboBoxExample::createAndShowGUI);
+    }
+
+    private static void createAndShowGUI() {
+        JFrame frame = new JFrame("Multi-Select JComboBox");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 200);
+        frame.setLayout(new FlowLayout());
+
+        // Create multi-select combo box
+        String[] items = {"Apple", "Banana", "Cherry", "Mango", "Orange"};
+        MultiSelectComboBox comboBox = new MultiSelectComboBox(items);
+        frame.add(comboBox);
+
+        frame.setVisible(true);
+    }
+
+    // Custom JComboBox with checkboxes
+    static class MultiSelectComboBox extends JComboBox<String> {
+        private final List<JCheckBox> checkBoxes = new ArrayList<>();
+        private final DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        
+        public MultiSelectComboBox(String[] items) {
+            super(items);
+            setModel(model); // Set custom model
+            setRenderer(new CheckBoxRenderer());
+            addActionListener(e -> toggleSelection());
+
+            // Add checkboxes to track selection
+            for (String item : items) {
+                JCheckBox checkBox = new JCheckBox(item);
+                checkBoxes.add(checkBox);
+                model.addElement(item);
+            }
+        }
+
+        // Toggle selection when an item is clicked
+        private void toggleSelection() {
+            int selectedIndex = getSelectedIndex();
+            if (selectedIndex >= 0) {
+                JCheckBox checkBox = checkBoxes.get(selectedIndex);
+                checkBox.setSelected(!checkBox.isSelected());
+                updateComboBoxDisplay();
+            }
+        }
+
+        // Update the displayed text with selected items
+        private void updateComboBoxDisplay() {
+            List<String> selectedItems = new ArrayList<>();
+            for (JCheckBox checkBox : checkBoxes) {
+                if (checkBox.isSelected()) {
+                    selectedItems.add(checkBox.getText());
+                }
+            }
+            setSelectedItem(selectedItems.isEmpty() ? "Select Items" : String.join(", ", selectedItems));
+        }
+    }
+
+    // Custom renderer to display checkboxes inside JComboBox dropdown
+    static class CheckBoxRenderer extends JCheckBox implements ListCellRenderer<Object> {
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            if (index >= 0) {
+                setText(value.toString());
+                setSelected(((JComboBox<?>) list.getParent()).getItemAt(index).equals(value));
+            }
+            return this;
+        }
+    }
+}
