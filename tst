@@ -872,3 +872,156 @@ public class MultiSelectComboBoxExample {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
+
+public class MultiSelectComboBoxExample {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(MultiSelectComboBoxExample::createAndShowGUI);
+    }
+
+    private static void createAndShowGUI() {
+        JFrame frame = new JFrame("Multi-Select JComboBox");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 200);
+        frame.setLayout(new FlowLayout());
+
+        // Multi-select combo box with "Select All"
+        String[] items = {"Apple", "Banana", "Cherry", "Mango", "Orange"};
+        MultiSelectComboBox comboBox = new MultiSelectComboBox(items);
+        frame.add(comboBox);
+
+        frame.setVisible(true);
+    }
+
+    static class MultiSelectComboBox extends JComboBox<Object> {
+        private final List<CheckableItem> checkableItems;
+        private final DefaultComboBoxModel<Object> model;
+        private boolean updating = false;
+
+        public MultiSelectComboBox(String[] items) {
+            checkableItems = new ArrayList<>();
+            model = new DefaultComboBoxModel<>();
+
+            // Add "Select All"
+            checkableItems.add(new CheckableItem("Select All", false));
+            model.addElement(checkableItems.get(0));
+
+            // Add items with checkboxes
+            for (String item : items) {
+                checkableItems.add(new CheckableItem(item, false));
+                model.addElement(checkableItems.get(checkableItems.size() - 1));
+            }
+
+            setModel(model);
+            setRenderer(new CheckBoxRenderer());
+            addActionListener(e -> toggleSelection());
+            addPopupMenuListener(new PopupMenuListener() {
+                public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+                    updating = true;
+                }
+
+                public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+                    updating = false;
+                }
+
+                public void popupMenuCanceled(PopupMenuEvent e) {}
+            });
+        }
+
+        private void toggleSelection() {
+            if (updating) return;
+
+            int selectedIndex = getSelectedIndex();
+            if (selectedIndex >= 0) {
+                CheckableItem selectedItem = checkableItems.get(selectedIndex);
+                selectedItem.setSelected(!selectedItem.isSelected());
+
+                // Handle "Select All" logic
+                if (selectedIndex == 0) {
+                    boolean selectAll = selectedItem.isSelected();
+                    for (CheckableItem item : checkableItems) {
+                        item.setSelected(selectAll);
+                    }
+                } else {
+                    // If any item is deselected, uncheck "Select All"
+                    checkableItems.get(0).setSelected(checkAllSelected());
+                }
+
+                repaint();
+            }
+        }
+
+        private boolean checkAllSelected() {
+            for (int i = 1; i < checkableItems.size(); i++) {
+                if (!checkableItems.get(i).isSelected()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    static class CheckableItem {
+        private final String text;
+        private boolean isSelected;
+
+        public CheckableItem(String text, boolean isSelected) {
+            this.text = text;
+            this.isSelected = isSelected;
+        }
+
+        public boolean isSelected() {
+            return isSelected;
+        }
+
+        public void setSelected(boolean isSelected) {
+            this.isSelected = isSelected;
+        }
+
+        public String toString() {
+            return text;
+        }
+    }
+
+    static class CheckBoxRenderer extends JPanel implements ListCellRenderer<Object> {
+        private final JCheckBox checkBox;
+
+        public CheckBoxRenderer() {
+            setLayout(new BorderLayout());
+            checkBox = new JCheckBox();
+            add(checkBox, BorderLayout.WEST);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            if (value instanceof CheckableItem) {
+                CheckableItem item = (CheckableItem) value;
+                checkBox.setText(item.toString());
+                checkBox.setSelected(item.isSelected());
+            }
+            setBackground(isSelected ? Color.LIGHT_GRAY : Color.WHITE);
+            return this;
+        }
+    }
+}
