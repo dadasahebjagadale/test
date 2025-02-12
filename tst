@@ -724,3 +724,151 @@ public class CheckBoxComboBoxExample {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+
+public class MultiSelectComboBoxExample {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(MultiSelectComboBoxExample::createAndShowGUI);
+    }
+
+    private static void createAndShowGUI() {
+        JFrame frame = new JFrame("Multi-Select JComboBox");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(400, 200);
+        frame.setLayout(new FlowLayout());
+
+        // Multi-select combo box with "Select All"
+        String[] items = {"Apple", "Banana", "Cherry", "Mango", "Orange"};
+        MultiSelectComboBox comboBox = new MultiSelectComboBox(items);
+        frame.add(comboBox);
+
+        frame.setVisible(true);
+    }
+
+    static class MultiSelectComboBox extends JComboBox<String> {
+        private final List<JCheckBox> checkBoxes = new ArrayList<>();
+        private final DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        private final JCheckBox selectAllCheckBox = new JCheckBox("Select All");
+        private final Set<String> selectedItems = new HashSet<>();
+        private boolean updating = false;
+
+        public MultiSelectComboBox(String[] items) {
+            super(items);
+            setModel(model);
+            setRenderer(new CheckBoxRenderer());
+            addActionListener(e -> toggleSelection());
+
+            // Add "Select All" checkbox
+            checkBoxes.add(selectAllCheckBox);
+            model.addElement("Select All");
+
+            // Add individual item checkboxes
+            for (String item : items) {
+                JCheckBox checkBox = new JCheckBox(item);
+                checkBoxes.add(checkBox);
+                model.addElement(item);
+            }
+
+            // Handle "Select All" toggle
+            selectAllCheckBox.addItemListener(e -> {
+                if (!updating) {
+                    boolean selectAll = selectAllCheckBox.isSelected();
+                    selectAllItems(selectAll);
+                }
+            });
+
+            // Handle individual item selection
+            for (int i = 1; i < checkBoxes.size(); i++) {
+                JCheckBox checkBox = checkBoxes.get(i);
+                checkBox.addItemListener(e -> {
+                    if (!updating) {
+                        updateSelectAllStatus();
+                    }
+                });
+            }
+        }
+
+        private void toggleSelection() {
+            int selectedIndex = getSelectedIndex();
+            if (selectedIndex >= 0) {
+                JCheckBox checkBox = checkBoxes.get(selectedIndex);
+                checkBox.setSelected(!checkBox.isSelected());
+                updateSelectAllStatus();
+            }
+        }
+
+        private void selectAllItems(boolean selectAll) {
+            updating = true;
+            selectedItems.clear();
+            for (int i = 1; i < checkBoxes.size(); i++) { // Skip "Select All"
+                checkBoxes.get(i).setSelected(selectAll);
+                if (selectAll) {
+                    selectedItems.add(checkBoxes.get(i).getText());
+                }
+            }
+            updating = false;
+            updateComboBoxDisplay();
+        }
+
+        private void updateSelectAllStatus() {
+            updating = true;
+            boolean allSelected = true;
+            selectedItems.clear();
+
+            for (int i = 1; i < checkBoxes.size(); i++) { // Skip "Select All"
+                if (!checkBoxes.get(i).isSelected()) {
+                    allSelected = false;
+                } else {
+                    selectedItems.add(checkBoxes.get(i).getText());
+                }
+            }
+
+            selectAllCheckBox.setSelected(allSelected);
+            updating = false;
+            updateComboBoxDisplay();
+        }
+
+        private void updateComboBoxDisplay() {
+            if (selectedItems.isEmpty()) {
+                setSelectedItem("Select All");
+            } else {
+                setSelectedItem(String.join(", ", selectedItems));
+            }
+        }
+    }
+
+    static class CheckBoxRenderer implements ListCellRenderer<Object> {
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            JCheckBox checkBox = new JCheckBox(value.toString());
+            checkBox.setOpaque(true);
+            checkBox.setBackground(isSelected ? Color.LIGHT_GRAY : Color.WHITE);
+            return checkBox;
+        }
+    }
+}
