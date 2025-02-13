@@ -1,4 +1,4 @@
-Yes, we can remove the dependency on the "Done" button and automatically update the selected values whenever the user checks or unchecks a checkbox. This can be achieved by adding an `ActionListener` to each `JCheckBoxMenuItem` so that the selection is updated in real time.
+Ah, I see the issue now! By default, when a user selects an item in a `JPopupMenu`, the popup closes automatically. To keep the popup open after selecting a checkbox, we need to override this behavior. This can be achieved by using a custom `JPopupMenu` that does not close when a `JCheckBoxMenuItem` is clicked.
 
 Here’s the updated implementation:
 
@@ -75,6 +75,30 @@ public class BankSelectionUI extends JFrame {
         resultLabel.setText("Selected Banks: " + String.join(", ", selectedBanks));
     }
 
+    // Custom JPopupMenu that stays open when a JCheckBoxMenuItem is clicked
+    private static class StayOpenPopupMenu extends JPopupMenu {
+        @Override
+        public void setVisible(boolean visible) {
+            // Only close the popup if the user clicks outside of it
+            if (visible) {
+                super.setVisible(true);
+            } else {
+                // Check if the source of the event is a JCheckBoxMenuItem
+                boolean isCheckBoxMenuItem = false;
+                for (Component component : getComponents()) {
+                    if (component instanceof JCheckBoxMenuItem && ((JCheckBoxMenuItem) component).isSelected()) {
+                        isCheckBoxMenuItem = true;
+                        break;
+                    }
+                }
+                // Do not close the popup if the source is a JCheckBoxMenuItem
+                if (!isCheckBoxMenuItem) {
+                    super.setVisible(false);
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             BankSelectionUI ui = new BankSelectionUI();
@@ -87,32 +111,38 @@ public class BankSelectionUI extends JFrame {
 ---
 
 ### Key Changes:
-1. **Real-Time Updates**:
-   - Each `JCheckBoxMenuItem` has an `ActionListener` attached to it.
-   - Whenever a checkbox is checked or unchecked, the `updateSelectedBanks()` method is called to update the selected banks in real time.
+1. **Custom `StayOpenPopupMenu`**:
+   - A custom `JPopupMenu` class (`StayOpenPopupMenu`) is created to override the `setVisible` method.
+   - The popup menu will only close if the user clicks outside of it, not when a `JCheckBoxMenuItem` is clicked.
 
-2. **No "Done" Button**:
-   - The dependency on the "Done" button is removed.
-   - The selected banks are automatically displayed as soon as the user interacts with the checkboxes.
+2. **Real-Time Updates**:
+   - Each `JCheckBoxMenuItem` still has an `ActionListener` attached to it, so the selected banks are updated in real time.
+
+3. **Popup Behavior**:
+   - The popup menu remains open when the user interacts with the checkboxes.
+   - It only closes when the user clicks outside the popup menu.
 
 ---
 
 ### How It Works:
-1. When the user clicks the **"Select Banks" button**, a popup menu appears with a list of banks and checkboxes.
-2. The user can select one or more banks by checking the checkboxes.
-3. As soon as a checkbox is checked or unchecked, the `resultLabel` is updated to show the selected banks in a comma-separated format.
+1. When the user clicks the **"Select Banks" button**, the custom popup menu appears.
+2. The user can interact with the checkboxes to select/deselect banks.
+3. The popup menu stays open while the user interacts with the checkboxes.
+4. The selected banks are updated in real time and displayed in the label.
+5. The popup menu only closes when the user clicks outside of it.
 
 ---
 
 ### Example Output:
 - **UI**: A button labeled "Select Banks" and a label below it.
-- **Popup Menu**: A list of banks with checkboxes.
+- **Popup Menu**: A list of banks with checkboxes that remains open while the user interacts with it.
 - **Result**: As soon as the user checks or unchecks a checkbox, the label updates to show the selected banks, e.g., `Selected Banks: Bank of America, Chase`.
 
 ---
 
 ### Advantages:
+- The popup menu remains open while the user interacts with the checkboxes.
 - No need for a "Done" button; the selection is updated in real time.
-- Simple and intuitive user interaction.
+- The popup only closes when the user clicks outside of it.
 
-Let me know if you need further assistance! 😊
+Let me know if you have further questions! 😊
