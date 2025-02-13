@@ -7,9 +7,9 @@ import java.util.List;
 
 public class BankSelectionUI extends JFrame {
 
-    private JComboBox<JCheckBox> bankComboBox;
-    private JButton showSelectedButton;
+    private JButton selectBanksButton;
     private JLabel resultLabel;
+    private JPopupMenu popupMenu;
 
     private List<String> banks = List.of("Bank of America", "Chase", "Wells Fargo", "Citibank", "HSBC");
 
@@ -20,51 +20,48 @@ public class BankSelectionUI extends JFrame {
         setLayout(new FlowLayout());
 
         // Initialize components
-        bankComboBox = new JComboBox<>();
-        showSelectedButton = new JButton("Show Selected Banks");
+        selectBanksButton = new JButton("Select Banks");
         resultLabel = new JLabel("Selected Banks: ");
+        popupMenu = new JPopupMenu();
 
-        // Populate the combo box with checkboxes
+        // Add checkboxes to the popup menu
         for (String bank : banks) {
-            JCheckBox checkBox = new JCheckBox(bank);
-            bankComboBox.addItem(checkBox);
+            JCheckBoxMenuItem checkBoxMenuItem = new JCheckBoxMenuItem(bank);
+            popupMenu.add(checkBoxMenuItem);
         }
 
-        // Set a custom renderer for the combo box
-        bankComboBox.setRenderer(new CheckBoxComboBoxRenderer());
-
-        // Add components to the frame
-        add(new JLabel("Select Banks: "));
-        add(bankComboBox);
-        add(showSelectedButton);
-        add(resultLabel);
-
         // Add action listener to the button
-        showSelectedButton.addActionListener(new ActionListener() {
+        selectBanksButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Show the popup menu below the button
+                popupMenu.show(selectBanksButton, 0, selectBanksButton.getHeight());
+            }
+        });
+
+        // Add a "Done" button to the popup menu to confirm selection
+        JMenuItem doneMenuItem = new JMenuItem("Done");
+        doneMenuItem.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 List<String> selectedBanks = new ArrayList<>();
-                for (int i = 0; i < bankComboBox.getItemCount(); i++) {
-                    JCheckBox checkBox = bankComboBox.getItemAt(i);
-                    if (checkBox.isSelected()) {
-                        selectedBanks.add(checkBox.getText());
+                for (Component component : popupMenu.getComponents()) {
+                    if (component instanceof JCheckBoxMenuItem) {
+                        JCheckBoxMenuItem checkBoxMenuItem = (JCheckBoxMenuItem) component;
+                        if (checkBoxMenuItem.isSelected()) {
+                            selectedBanks.add(checkBoxMenuItem.getText());
+                        }
                     }
                 }
                 resultLabel.setText("Selected Banks: " + String.join(", ", selectedBanks));
             }
         });
-    }
+        popupMenu.addSeparator(); // Add a separator before the "Done" button
+        popupMenu.add(doneMenuItem);
 
-    // Custom renderer for the JComboBox
-    private static class CheckBoxComboBoxRenderer implements ListCellRenderer<JCheckBox> {
-        @Override
-        public Component getListCellRendererComponent(JList<? extends JCheckBox> list, JCheckBox value, int index,
-                                                      boolean isSelected, boolean cellHasFocus) {
-            // Customize the appearance of the checkbox in the combo box
-            value.setBackground(isSelected ? list.getSelectionBackground() : list.getBackground());
-            value.setForeground(isSelected ? list.getSelectionForeground() : list.getForeground());
-            return value;
-        }
+        // Add components to the frame
+        add(selectBanksButton);
+        add(resultLabel);
     }
 
     public static void main(String[] args) {
