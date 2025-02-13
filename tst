@@ -30,6 +30,9 @@ public class BankSelectionUI extends JFrame {
             bankComboBox.addItem(checkBox);
         }
 
+        // Set a custom renderer for the combo box
+        bankComboBox.setRenderer(new CheckBoxComboBoxRenderer());
+
         // Add components to the frame
         add(new JLabel("Select Banks: "));
         add(bankComboBox);
@@ -50,6 +53,18 @@ public class BankSelectionUI extends JFrame {
                 resultLabel.setText("Selected Banks: " + String.join(", ", selectedBanks));
             }
         });
+    }
+
+    // Custom renderer for the JComboBox
+    private static class CheckBoxComboBoxRenderer implements ListCellRenderer<JCheckBox> {
+        @Override
+        public Component getListCellRendererComponent(JList<? extends JCheckBox> list, JCheckBox value, int index,
+                                                      boolean isSelected, boolean cellHasFocus) {
+            // Customize the appearance of the checkbox in the combo box
+            value.setBackground(isSelected ? list.getSelectionBackground() : list.getBackground());
+            value.setForeground(isSelected ? list.getSelectionForeground() : list.getForeground());
+            return value;
+        }
     }
 
     public static void main(String[] args) {
