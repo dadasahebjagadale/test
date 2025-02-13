@@ -1,6 +1,6 @@
-Yes! Below is your updated BankSelectionUI code with point 2 integrated—ensuring that the popup menu remains open while the user makes selections.
+You're right! The issue is that pattern matching for instanceof (if (component instanceof JCheckBoxMenuItem checkBoxMenuItem)) requires Java 16+. If you're using an earlier version of Java, you should revert to explicit casting.
 
-Updated Code
+Fixed Code (Compatible with Java 8+)
 
 import javax.swing.*;
 import java.awt.*;
@@ -51,8 +51,11 @@ public class BankSelectionUI extends JFrame {
     private void updateSelectedBanks() {
         List<String> selectedBanks = new ArrayList<>();
         for (Component component : popupMenu.getComponents()) {
-            if (component instanceof JCheckBoxMenuItem checkBoxMenuItem && checkBoxMenuItem.isSelected()) {
-                selectedBanks.add(checkBoxMenuItem.getText());
+            if (component instanceof JCheckBoxMenuItem) {
+                JCheckBoxMenuItem checkBoxMenuItem = (JCheckBoxMenuItem) component;  // Explicit casting
+                if (checkBoxMenuItem.isSelected()) {
+                    selectedBanks.add(checkBoxMenuItem.getText());
+                }
             }
         }
         resultLabel.setText("Selected Banks: " + String.join(", ", selectedBanks));
@@ -66,26 +69,17 @@ public class BankSelectionUI extends JFrame {
     }
 }
 
-Changes & Enhancements
+Fix Summary
 
-1. Popup Menu Stays Open While Selecting Items
+1. Reverted to explicit casting for JCheckBoxMenuItem:
 
-Using SwingUtilities.invokeLater(this::updateSelectedBanks) inside the checkbox ActionListener, ensuring the popup remains open for multiple selections.
+if (component instanceof JCheckBoxMenuItem) {
+    JCheckBoxMenuItem checkBoxMenuItem = (JCheckBoxMenuItem) component;
+}
 
-
-
-2. Centered Popup Positioning
-
-Adjusted popup position with:
-
-int x = (selectBanksButton.getWidth() - popupMenu.getPreferredSize().width) / 2;
-popupMenu.show(selectBanksButton, x, selectBanksButton.getHeight());
-
-Ensures the popup appears centered below the button.
+This ensures compatibility with Java 8 and later versions.
 
 
 
 
-Now, users can select multiple banks without the menu closing after each click.
-
-Let me know if you need further refinements!
+Everything else remains the same. Your program will now compile and run correctly. Let me know if you need any more refinements!
