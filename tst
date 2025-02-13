@@ -1,6 +1,6 @@
-You're absolutely correct! The issue with the previous implementation is that `JComboBox` does not natively support selecting multiple items with checkboxes. To achieve the functionality you want (selecting one or more banks using checkboxes in a drop-down), we need to use a different approach.
+Yes, we can remove the dependency on the "Done" button and automatically update the selected values whenever the user checks or unchecks a checkbox. This can be achieved by adding an `ActionListener` to each `JCheckBoxMenuItem` so that the selection is updated in real time.
 
-A better solution is to use a **`JPopupMenu` with `JCheckBoxMenuItem`** or a **custom component** that allows multiple selections. Below is an updated implementation using `JPopupMenu` and `JCheckBoxMenuItem`:
+Here’s the updated implementation:
 
 ---
 
@@ -37,6 +37,14 @@ public class BankSelectionUI extends JFrame {
         for (String bank : banks) {
             JCheckBoxMenuItem checkBoxMenuItem = new JCheckBoxMenuItem(bank);
             popupMenu.add(checkBoxMenuItem);
+
+            // Add an ActionListener to each checkbox to update the selection in real time
+            checkBoxMenuItem.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    updateSelectedBanks();
+                }
+            });
         }
 
         // Add action listener to the button
@@ -48,29 +56,23 @@ public class BankSelectionUI extends JFrame {
             }
         });
 
-        // Add a "Done" button to the popup menu to confirm selection
-        JMenuItem doneMenuItem = new JMenuItem("Done");
-        doneMenuItem.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                List<String> selectedBanks = new ArrayList<>();
-                for (Component component : popupMenu.getComponents()) {
-                    if (component instanceof JCheckBoxMenuItem) {
-                        JCheckBoxMenuItem checkBoxMenuItem = (JCheckBoxMenuItem) component;
-                        if (checkBoxMenuItem.isSelected()) {
-                            selectedBanks.add(checkBoxMenuItem.getText());
-                        }
-                    }
-                }
-                resultLabel.setText("Selected Banks: " + String.join(", ", selectedBanks));
-            }
-        });
-        popupMenu.addSeparator(); // Add a separator before the "Done" button
-        popupMenu.add(doneMenuItem);
-
         // Add components to the frame
         add(selectBanksButton);
         add(resultLabel);
+    }
+
+    // Method to update the selected banks in real time
+    private void updateSelectedBanks() {
+        List<String> selectedBanks = new ArrayList<>();
+        for (Component component : popupMenu.getComponents()) {
+            if (component instanceof JCheckBoxMenuItem) {
+                JCheckBoxMenuItem checkBoxMenuItem = (JCheckBoxMenuItem) component;
+                if (checkBoxMenuItem.isSelected()) {
+                    selectedBanks.add(checkBoxMenuItem.getText());
+                }
+            }
+        }
+        resultLabel.setText("Selected Banks: " + String.join(", ", selectedBanks));
     }
 
     public static void main(String[] args) {
@@ -84,34 +86,33 @@ public class BankSelectionUI extends JFrame {
 
 ---
 
-### Key Features of This Implementation:
-1. **`JPopupMenu` with `JCheckBoxMenuItem`**:
-   - A `JPopupMenu` is used to display a list of banks with checkboxes (`JCheckBoxMenuItem`).
-   - Users can select one or more banks by checking the checkboxes.
+### Key Changes:
+1. **Real-Time Updates**:
+   - Each `JCheckBoxMenuItem` has an `ActionListener` attached to it.
+   - Whenever a checkbox is checked or unchecked, the `updateSelectedBanks()` method is called to update the selected banks in real time.
 
-2. **"Done" Button**:
-   - A "Done" button is added to the popup menu to confirm the selection.
-   - When the user clicks "Done", the selected banks are displayed in a comma-separated format.
-
-3. **Flexibility**:
-   - Users can select one or more banks by checking/unchecking the checkboxes.
-   - The popup menu is displayed below the "Select Banks" button when clicked.
+2. **No "Done" Button**:
+   - The dependency on the "Done" button is removed.
+   - The selected banks are automatically displayed as soon as the user interacts with the checkboxes.
 
 ---
 
 ### How It Works:
 1. When the user clicks the **"Select Banks" button**, a popup menu appears with a list of banks and checkboxes.
 2. The user can select one or more banks by checking the checkboxes.
-3. After selecting the desired banks, the user clicks the **"Done" button** in the popup menu.
-4. The selected banks are displayed in a comma-separated format below the button.
+3. As soon as a checkbox is checked or unchecked, the `resultLabel` is updated to show the selected banks in a comma-separated format.
 
 ---
 
 ### Example Output:
 - **UI**: A button labeled "Select Banks" and a label below it.
-- **Popup Menu**: A list of banks with checkboxes and a "Done" button.
-- **Result**: After selecting banks and clicking "Done", the label updates to show the selected banks, e.g., `Selected Banks: Bank of America, Chase`.
+- **Popup Menu**: A list of banks with checkboxes.
+- **Result**: As soon as the user checks or unchecks a checkbox, the label updates to show the selected banks, e.g., `Selected Banks: Bank of America, Chase`.
 
 ---
 
-This approach provides the flexibility you need to select one or more banks using checkboxes. Let me know if you have further questions! 😊
+### Advantages:
+- No need for a "Done" button; the selection is updated in real time.
+- Simple and intuitive user interaction.
+
+Let me know if you need further assistance! 😊
