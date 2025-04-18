@@ -1,161 +1,82 @@
-To prevent the JComboBox dropdown from closing after a click, we need to override its default behavior. By default, when an item is selected, Swing closes the popup. We can handle this by customizing the behavior using a JPopupMenu and a custom MouseListener.
+import java.io.*;
+import java.util.*;
 
+public class TransactionCsvProcessor {
 
----
+    public static void main(String[] args) throws IOException {
+        File inputFile = new File("input.csv");
+        File outputFile = new File("output.csv");
 
-✅ Final Working Solution:
+        Map<String, File> txnFiles = new HashMap<>();
+        Set<String> tenors = new TreeSet<>(); // Sorted order
 
-This approach keeps the dropdown open until the user clicks outside.
+        // First Pass: Split into temp files & collect tenors
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputFile))) {
+            String header = reader.readLine(); // Skip header
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",", -1);
+                String txnKey = parts[0] + "|" + parts[1] + "|" + parts[2]; // txnid|currency|docclause
+                String tenor = parts[3].trim();
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.List;
+                tenors.add(tenor);
 
-public class CheckBoxComboBox extends JComboBox<CheckBoxItem> {
-    private boolean keepOpen = false; // To control when to close the dropdown
+                File tempFile = txnFiles.computeIfAbsent(txnKey, k -> {
+                    try {
+                        return File.createTempFile("txn_" + k.replace("|", "_"), ".tmp");
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                });
 
-    public CheckBoxComboBox(CheckBoxItem[] items) {
-        super(items);
-        setRenderer(new CheckBoxRenderer());
-
-        // Prevent dropdown from closing
-        addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                keepOpen = true; // Ensure popup remains open
-                CheckBoxItem item = (CheckBoxItem) getSelectedItem();
-                if (item != null) {
-                    item.setSelected(!item.isSelected());
-                    repaint();
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile, true))) {
+                    writer.write(line);
+                    writer.newLine();
                 }
-            }
-        });
-
-        // Prevent dropdown from closing when clicking inside
-        getComponent(0).addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                keepOpen = true;
-            }
-        });
-
-        // Use a popup menu to handle closing behavior properly
-        addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
-            @Override
-            public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
-                keepOpen = false;
-            }
-
-            @Override
-            public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {
-                if (keepOpen) {
-                    SwingUtilities.invokeLater(() -> setPopupVisible(true)); // Keep dropdown open
-                }
-            }
-
-            @Override
-            public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {
-            }
-        });
-    }
-
-    public List<CheckBoxItem> getSelectedItems() {
-        List<CheckBoxItem> selectedItems = new ArrayList<>();
-        for (int i = 0; i < getItemCount(); i++) {
-            CheckBoxItem item = getItemAt(i);
-            if (item.isSelected()) {
-                selectedItems.add(item);
             }
         }
-        return selectedItems;
+
+        // Second Pass: Write output
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            // Write header
+            writer.write("txnid,currency,docclause");
+            for (String tenor : tenors) {
+                writer.write(",tq_" + tenor + ",pq_" + tenor);
+            }
+            writer.newLine();
+
+            // Process each temp file
+            for (Map.Entry<String, File> entry : txnFiles.entrySet()) {
+                String txnKey = entry.getKey();
+                File file = entry.getValue();
+
+                Map<String, String[]> tenorMap = new HashMap<>();
+
+                try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        String[] parts = line.split(",", -1);
+                        String tenor = parts[3].trim();
+                        String tq = parts[4].trim();
+                        String pq = parts[5].trim();
+                        tenorMap.put(tenor, new String[]{tq, pq});
+                    }
+                }
+
+                // Write output line
+                String[] txnParts = txnKey.split("\\|");
+                writer.write(String.join(",", txnParts)); // txnid, currency, docclause
+
+                for (String tenor : tenors) {
+                    String[] values = tenorMap.getOrDefault(tenor, new String[]{"", ""});
+                    writer.write("," + values[0] + "," + values[1]);
+                }
+                writer.newLine();
+
+                file.delete(); // Clean up temp file
+            }
+        }
+
+        System.out.println("Done! Output written to: " + outputFile.getAbsolutePath());
     }
 }
-
-// CheckBox Item Model
-class CheckBoxItem {
-    private String text;
-    private boolean selected;
-
-    public CheckBoxItem(String text, boolean selected) {
-        this.text = text;
-        this.selected = selected;
-    }
-
-    public boolean isSelected() {
-        return selected;
-    }
-
-    public void setSelected(boolean selected) {
-        this.selected = selected;
-    }
-
-    @Override
-    public String toString() {
-        return text;
-    }
-}
-
-// Custom Renderer for CheckBox
-class CheckBoxRenderer extends JCheckBox implements ListCellRenderer<Object> {
-    @Override
-    public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-        CheckBoxItem item = (CheckBoxItem) value;
-        setText(item.toString());
-        setSelected(item.isSelected());
-        return this;
-    }
-}
-
-// Main Class to Test the ComboBox
-class CheckBoxComboBoxTest {
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("CheckBox ComboBox Example");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setSize(300, 200);
-            frame.setLayout(new FlowLayout());
-
-            CheckBoxItem[] items = {
-                new CheckBoxItem("Option 1", false),
-                new CheckBoxItem("Option 2", false),
-                new CheckBoxItem("Option 3", false)
-            };
-
-            CheckBoxComboBox comboBox = new CheckBoxComboBox(items);
-            frame.add(comboBox);
-
-            frame.setVisible(true);
-        });
-    }
-}
-
-
----
-
-🔧 Fixes & Enhancements in This Version:
-
-✅ Dropdown stays open after selection
-✅ Closes only when clicking outside
-✅ Prevents JComboBox default behavior of closing after a click
-✅ Uses PopupMenuListener to control visibility
-
-💡 How It Works:
-
-1. keepOpen = true; ensures the popup remains open when clicking on items.
-
-
-2. setPopupVisible(true); is used to reopen the dropdown if it tries to close.
-
-
-3. PopupMenuListener ensures that clicking inside does not close the dropdown but clicking outside does.
-
-
-
-Now, clicking checkboxes won't close the dropdown, but clicking outside will! 🎉
-
-Would you like any further modifications, such as a "Select All" option? 🚀
