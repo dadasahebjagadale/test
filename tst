@@ -1,143 +1,125 @@
-import java.io.*;
-import java.util.*;
+Absolutely! Here's an enhanced version of the parser that processes a list of log files (not just one), applying the same logic to each file and collecting all the JavaCommand objects into a single list.
 
-public class CSVProcessor {
-    
-    public static void main(String[] args) {
-        String inputFile = "input.csv";  // Input file path
-        String outputFile = "output.csv";  // Output file path
-        
-        try (
-            BufferedReader reader = new BufferedReader(new FileReader(inputFile));
-            BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))
-        ) {
-            // Reading the headers
-            String headerLine = reader.readLine(); // 1st line has the header of input file
-            String[] headers = headerLine.split(",", -1);
-            
-            // Create a map to store the indices of the headers for easy access
-            Map<String, Integer> headerIndex = new LinkedHashMap<>();
-            for (int i = 0; i < headers.length; i++) {
-                headerIndex.put(headers[i].trim().toLowerCase(), i);
-            }
-            
-            // Output headers (fixed + dynamic fields)
-            List<String> outputHeaders = Arrays.asList(
-                "ticket", "shortname", "redcode", "tier", "currency", "docclause", "recovery", "compositecurverating",
-                "sector", "region", "country", "avrating", "impliedrating",
-                "spread1M", "spread6M", "spread1Y", "spread3Y", // Example tenors
-                "rating1M", "rating6M", "rating1Y", "rating3Y",  // Example tenors
-                "extraField1", "extraField2"  // Extra fields
-            );
-            
-            // Write the output headers to the file
-            writer.write(String.join(",", outputHeaders));
-            writer.newLine();
-            writer.write("Transaction Data Starts from the 3rd Row.");
-            writer.newLine();
-            
-            // Variables for processing transactions
-            String currentKey = "";
-            Map<String, String> currentTransaction = new HashMap<>();
-            
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] fields = line.split(",", -1);
-                
-                // Skip if primaryCoupan is not 'Y'
-                String couponFlag = fields[headerIndex.get("primarycoupan")];
-                if (!"Y".equalsIgnoreCase(couponFlag)) {
-                    continue;
-                }
-                
-                // Generate transaction key using all common fields
-                String ticket = fields[headerIndex.get("ticket")];
-                String shortName = fields[headerIndex.get("shortname")];
-                String redcode = fields[headerIndex.get("redcode")];
-                String tier = fields[headerIndex.get("tier")];
-                String currency = fields[headerIndex.get("currency")];
-                String docclause = fields[headerIndex.get("docclause")];
-                String recovery = fields[headerIndex.get("recovery")];
-                String compositeCurverating = fields[headerIndex.get("compositecurverating")];
-                String sector = fields[headerIndex.get("sector")];
-                String region = fields[headerIndex.get("region")];
-                String country = fields[headerIndex.get("country")];
-                String avrating = fields[headerIndex.get("avrating")];
-                String impliedrating = fields[headerIndex.get("impliedrating")];
-                
-                // Use all 13 common fields to form the transaction key
-                String key = String.join("|", ticket, shortName, redcode, tier, currency, docclause, recovery,
-                        compositeCurverating, sector, region, country, avrating, impliedrating);
-                
-                // If the key changes, write the current transaction and reset for new one
-                if (!key.equals(currentKey)) {
-                    if (currentTransaction != null && !currentTransaction.isEmpty()) {
-                        writeTransactionRow(writer, outputHeaders, currentTransaction);
-                    }
-                    // Reset for new transaction
-                    currentTransaction = new HashMap<>();
-                    currentKey = key;
-                    
-                    // Populate common fields
-                    currentTransaction.put("ticket", ticket);
-                    currentTransaction.put("shortname", shortName);
-                    currentTransaction.put("redcode", redcode);
-                    currentTransaction.put("tier", tier);
-                    currentTransaction.put("currency", currency);
-                    currentTransaction.put("docclause", docclause);
-                    currentTransaction.put("recovery", recovery);
-                    currentTransaction.put("compositecurverating", compositeCurverating);
-                    currentTransaction.put("sector", sector);
-                    currentTransaction.put("region", region);
-                    currentTransaction.put("country", country);
-                    currentTransaction.put("avrating", avrating);
-                    currentTransaction.put("impliedrating", impliedrating);
-                    
-                    // Extra fields (can be dynamic or hardcoded)
-                    currentTransaction.put("extraField1", "");  // Blank for now, modify as needed
-                    currentTransaction.put("extraField2", "");  // Blank for now, modify as needed
-                }
-                
-                // Handle tenor-based fields (spread and rating)
-                String tenor = fields[headerIndex.get("tenor")].toUpperCase();  // e.g., 1M, 6M, 1Y
-                String parSpreadMid = fields[headerIndex.get("parspreadmid")];
-                String compositePriceRating = fields[headerIndex.get("compositepricerating")];
-                
-                // Add the corresponding spread and rating based on tenor
-                if (tenor.equals("1M")) {
-                    currentTransaction.put("spread1M", parSpreadMid);
-                    currentTransaction.put("rating1M", compositePriceRating);
-                } else if (tenor.equals("6M")) {
-                    currentTransaction.put("spread6M", parSpreadMid);
-                    currentTransaction.put("rating6M", compositePriceRating);
-                } else if (tenor.equals("1Y")) {
-                    currentTransaction.put("spread1Y", parSpreadMid);
-                    currentTransaction.put("rating1Y", compositePriceRating);
-                } else if (tenor.equals("3Y")) {
-                    currentTransaction.put("spread3Y", parSpreadMid);
-                    currentTransaction.put("rating3Y", compositePriceRating);
-                }
-            }
-            
-            // Flush the last transaction if any
-            if (currentTransaction != null && !currentTransaction.isEmpty()) {
-                writeTransactionRow(writer, outputHeaders, currentTransaction);
-            }
-            
-            System.out.println("Processing complete. Output written to: " + outputFile);
-            
-        } catch (IOException e) {
-            e.printStackTrace();
+
+---
+
+Updated Method to Handle Multiple Files
+
+import java.io.*;
+import java.nio.file.*;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.regex.*;
+
+public class MultiFileLogParser {
+
+    private static final Pattern JAVA_LINE_PATTERN = Pattern.compile("java\\s+((?:-D[^\\s]+\\s+)*).*?\\s+([\\w\\.]+)\\s*(.*)");
+    private static final Pattern SUCCESS_PATTERN = Pattern.compile("\"quote found.*?(\\d{4}-\\d{2}-\\d{2})");
+    private static final Pattern FAILURE_PATTERN = Pattern.compile("could not retrieve quote.*?(\\d{4}-\\d{2}-\\d{2})");
+
+    public static List<JavaCommand> parseMultipleLogFiles(List<String> filePaths) throws IOException {
+        List<JavaCommand> allCommands = new ArrayList<>();
+
+        for (String path : filePaths) {
+            List<JavaCommand> commandsFromFile = parseSingleLogFile(path);
+            allCommands.addAll(commandsFromFile);
         }
+
+        return allCommands;
     }
 
-    // Method to write the current transaction as a row in the output file
-    private static void writeTransactionRow(BufferedWriter writer, List<String> headers, Map<String, String> data) throws IOException {
-        List<String> row = new ArrayList<>();
-        for (String col : headers) {
-            row.add(data.getOrDefault(col, ""));
+    private static List<JavaCommand> parseSingleLogFile(String filePath) throws IOException {
+        List<JavaCommand> commands = new ArrayList<>();
+        JavaCommand currentCommand = null;
+        String currentLatestResponse = null;
+        LocalDate currentLatestDate = null;
+
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath))) {
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                Matcher javaMatcher = JAVA_LINE_PATTERN.matcher(line);
+
+                if (javaMatcher.find()) {
+                    if (currentCommand != null) {
+                        currentCommand.setLatestResponse(currentLatestResponse);
+                        commands.add(currentCommand);
+                    }
+
+                    // Start new command
+                    String dParams = javaMatcher.group(1).trim();
+                    String mainClass = javaMatcher.group(2).trim();
+                    String argsPart = javaMatcher.group(3).trim();
+
+                    Map<String, String> systemProperties = new HashMap<>();
+                    for (String token : dParams.split("\\s+")) {
+                        if (token.startsWith("-D")) {
+                            String[] keyValue = token.substring(2).split("=", 2);
+                            if (keyValue.length == 2) {
+                                systemProperties.put(keyValue[0], keyValue[1]);
+                            }
+                        }
+                    }
+
+                    List<String> args = argsPart.isEmpty() ? new ArrayList<>() : Arrays.asList(argsPart.split("\\s+"));
+
+                    currentCommand = new JavaCommand();
+                    currentCommand.setMainClass(mainClass);
+                    currentCommand.setArgs(args);
+                    currentCommand.setSystemProperties(systemProperties);
+
+                    currentLatestDate = null;
+                    currentLatestResponse = null;
+
+                } else if (currentCommand != null) {
+                    Matcher successMatcher = SUCCESS_PATTERN.matcher(line);
+                    Matcher failureMatcher = FAILURE_PATTERN.matcher(line);
+                    LocalDate date = null;
+
+                    if (successMatcher.find()) {
+                        date = LocalDate.parse(successMatcher.group(1));
+                        if (currentLatestDate == null || date.isAfter(currentLatestDate)) {
+                            currentLatestDate = date;
+                            currentLatestResponse = line;
+                        }
+                    } else if (failureMatcher.find()) {
+                        date = LocalDate.parse(failureMatcher.group(1));
+                        if (currentLatestDate == null || date.isAfter(currentLatestDate)) {
+                            currentLatestDate = date;
+                            currentLatestResponse = line;
+                        }
+                    }
+                }
+            }
         }
-        writer.write(String.join(",", row));
-        writer.newLine();
+
+        if (currentCommand != null) {
+            currentCommand.setLatestResponse(currentLatestResponse);
+            commands.add(currentCommand);
+        }
+
+        return commands;
     }
 }
+
+
+---
+
+Usage Example
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        List<String> files = List.of("log1.txt", "log2.txt", "log3.txt");
+        List<JavaCommand> allCommands = MultiFileLogParser.parseMultipleLogFiles(files);
+
+        for (JavaCommand command : allCommands) {
+            System.out.println("Main Class: " + command.getMainClass());
+            System.out.println("System Properties: " + command.getSystemProperties());
+            System.out.println("Args: " + command.getArgs());
+            System.out.println("Latest Response: " + command.getLatestResponse());
+            System.out.println("------------");
+        }
+    }
+}
+
+Would you like this packaged into a Maven or Gradle project structure?
