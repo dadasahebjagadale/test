@@ -123,3 +123,16 @@ public class Main {
 }
 
 Would you like this packaged into a Maven or Gradle project structure?
+
+
+
+
+
+public class JavaCommand {
+    private String mainClass;
+    private List<String> args;
+    private Map<String, String> systemProperties;
+    private String latestResponse; // The latest success/failure line
+
+    // Getters and Setters
+}
