@@ -1,138 +1,114 @@
-Absolutely! Here's an enhanced version of the parser that processes a list of log files (not just one), applying the same logic to each file and collecting all the JavaCommand objects into a single list.
+Great question.
+
+Short Answer:
+
+No, Symphony does not support real-time "push-based" listeners (like WebSocket callbacks) for bots. The standard way is to poll the message endpoint at regular intervals — this is the only approach when SDKs or WebHooks are not permitted, as in your case.
 
 
 ---
 
-Updated Method to Handle Multiple Files
+Why Polling is Required?
 
-import java.io.*;
-import java.nio.file.*;
-import java.time.LocalDate;
-import java.util.*;
-import java.util.regex.*;
+Symphony's backend does not push new messages to you. Bots poll the Datafeed or chatroom API repeatedly to "listen" for new messages.
 
-public class MultiFileLogParser {
+So your "listener" is a Vert.x timer that:
 
-    private static final Pattern JAVA_LINE_PATTERN = Pattern.compile("java\\s+((?:-D[^\\s]+\\s+)*).*?\\s+([\\w\\.]+)\\s*(.*)");
-    private static final Pattern SUCCESS_PATTERN = Pattern.compile("\"quote found.*?(\\d{4}-\\d{2}-\\d{2})");
-    private static final Pattern FAILURE_PATTERN = Pattern.compile("could not retrieve quote.*?(\\d{4}-\\d{2}-\\d{2})");
+Polls every few seconds.
 
-    public static List<JavaCommand> parseMultipleLogFiles(List<String> filePaths) throws IOException {
-        List<JavaCommand> allCommands = new ArrayList<>();
+Checks for new messages.
 
-        for (String path : filePaths) {
-            List<JavaCommand> commandsFromFile = parseSingleLogFile(path);
-            allCommands.addAll(commandsFromFile);
-        }
+Triggers your logic if a new message arrives.
 
-        return allCommands;
+
+
+---
+
+How to Build a Real-Time-like Listener Using Vert.x
+
+You simulate a listener using Vert.x setPeriodic, like this:
+
+1. Listener Class
+
+public class SymphonyMessageListener {
+
+    private final WebClient client;
+    private final Vertx vertx;
+    private final String authKey;
+    private final String baseUrl;
+    private final String roomName;
+
+    private String lastMessageId = null;
+
+    public SymphonyMessageListener(Vertx vertx, String baseUrl, String authKey, String roomName) {
+        this.vertx = vertx;
+        this.client = WebClient.create(vertx);
+        this.authKey = authKey;
+        this.baseUrl = baseUrl;
+        this.roomName = roomName;
     }
 
-    private static List<JavaCommand> parseSingleLogFile(String filePath) throws IOException {
-        List<JavaCommand> commands = new ArrayList<>();
-        JavaCommand currentCommand = null;
-        String currentLatestResponse = null;
-        LocalDate currentLatestDate = null;
+    public void startListening(Handler<JsonObject> messageHandler) {
+        vertx.setPeriodic(2000, id -> {
+            client.getAbs(baseUrl + "/chatroom/" + roomName + "/messages") // Adjust path as needed
+                .putHeader("Authorization", authKey)
+                .send(ar -> {
+                    if (ar.succeeded()) {
+                        JsonArray messages = ar.result().bodyAsJsonArray();
+                        for (int i = 0; i < messages.size(); i++) {
+                            JsonObject msg = messages.getJsonObject(i);
+                            String msgId = msg.getString("id");
 
-        try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath))) {
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                Matcher javaMatcher = JAVA_LINE_PATTERN.matcher(line);
-
-                if (javaMatcher.find()) {
-                    if (currentCommand != null) {
-                        currentCommand.setLatestResponse(currentLatestResponse);
-                        commands.add(currentCommand);
-                    }
-
-                    // Start new command
-                    String dParams = javaMatcher.group(1).trim();
-                    String mainClass = javaMatcher.group(2).trim();
-                    String argsPart = javaMatcher.group(3).trim();
-
-                    Map<String, String> systemProperties = new HashMap<>();
-                    for (String token : dParams.split("\\s+")) {
-                        if (token.startsWith("-D")) {
-                            String[] keyValue = token.substring(2).split("=", 2);
-                            if (keyValue.length == 2) {
-                                systemProperties.put(keyValue[0], keyValue[1]);
+                            if (lastMessageId == null || msgId.compareTo(lastMessageId) > 0) {
+                                lastMessageId = msgId;
+                                messageHandler.handle(msg);  // Trigger your callback
                             }
                         }
+                    } else {
+                        System.err.println("Failed to fetch messages: " + ar.cause().getMessage());
                     }
-
-                    List<String> args = argsPart.isEmpty() ? new ArrayList<>() : Arrays.asList(argsPart.split("\\s+"));
-
-                    currentCommand = new JavaCommand();
-                    currentCommand.setMainClass(mainClass);
-                    currentCommand.setArgs(args);
-                    currentCommand.setSystemProperties(systemProperties);
-
-                    currentLatestDate = null;
-                    currentLatestResponse = null;
-
-                } else if (currentCommand != null) {
-                    Matcher successMatcher = SUCCESS_PATTERN.matcher(line);
-                    Matcher failureMatcher = FAILURE_PATTERN.matcher(line);
-                    LocalDate date = null;
-
-                    if (successMatcher.find()) {
-                        date = LocalDate.parse(successMatcher.group(1));
-                        if (currentLatestDate == null || date.isAfter(currentLatestDate)) {
-                            currentLatestDate = date;
-                            currentLatestResponse = line;
-                        }
-                    } else if (failureMatcher.find()) {
-                        date = LocalDate.parse(failureMatcher.group(1));
-                        if (currentLatestDate == null || date.isAfter(currentLatestDate)) {
-                            currentLatestDate = date;
-                            currentLatestResponse = line;
-                        }
-                    }
-                }
-            }
-        }
-
-        if (currentCommand != null) {
-            currentCommand.setLatestResponse(currentLatestResponse);
-            commands.add(currentCommand);
-        }
-
-        return commands;
+                });
+        });
     }
 }
 
 
 ---
 
-Usage Example
+2. How to Use the Listener in Your Verticle
 
-public class Main {
-    public static void main(String[] args) throws IOException {
-        List<String> files = List.of("log1.txt", "log2.txt", "log3.txt");
-        List<JavaCommand> allCommands = MultiFileLogParser.parseMultipleLogFiles(files);
+public class MainVerticle extends AbstractVerticle {
 
-        for (JavaCommand command : allCommands) {
-            System.out.println("Main Class: " + command.getMainClass());
-            System.out.println("System Properties: " + command.getSystemProperties());
-            System.out.println("Args: " + command.getArgs());
-            System.out.println("Latest Response: " + command.getLatestResponse());
-            System.out.println("------------");
-        }
+    @Override
+    public void start() {
+        String baseUrl = "https://your-symphony-url.com";
+        String authKey = "your-auth-key";
+        String roomName = "your-room-name";
+
+        SymphonyMessageListener listener = new SymphonyMessageListener(vertx, baseUrl, authKey, roomName);
+        listener.startListening(message -> {
+            // Your business logic here
+            System.out.println("New message received: " + message.encodePrettily());
+        });
     }
 }
 
-Would you like this packaged into a Maven or Gradle project structure?
+
+---
+
+What You Achieve with This?
+
+You simulate a real-time listener using scheduled polling.
+
+You can reuse startListening() anywhere and handle messages via callback.
+
+The Handler<JsonObject> lets you plug in any custom logic.
 
 
 
+---
 
+Let me know:
 
-public class JavaCommand {
-    private String mainClass;
-    private List<String> args;
-    private Map<String, String> systemProperties;
-    private String latestResponse; // The latest success/failure line
+The exact path of your GET message API (e.g., /messages?room=xyz) — I’ll tailor the code precisely.
 
-    // Getters and Setters
-}
+Whether the message payload contains a timestamp or ID — we can then improve deduplication.
